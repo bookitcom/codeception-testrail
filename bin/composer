@@ -1,0 +1,4 @@
+#!/bin/bash
+
+docker-compose run --rm -e COMPOSER_DISABLE_XDEBUG_WARN=1 php \
+	php -d xdebug.remote_enable=0 -d xdebug.profiler_enable=0 -d xdebug.default_enable=0 /usr/local/bin/composer $@

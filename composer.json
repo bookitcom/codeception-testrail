@@ -1,0 +1,6 @@
+{
+    "name": "bookit/codeception-testrail",
+    "require": {
+        "codeception/codeception": "^2.2"
+    }
+}

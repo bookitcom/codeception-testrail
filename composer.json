@@ -6,4 +6,9 @@
     "require-dev": {
         "squizlabs/php_codesniffer": "^2.6"
     }
+    "autoload": {
+        "psr-4": {
+            "BookIt\\Codeception": "src/"
+        }
+    }
 }

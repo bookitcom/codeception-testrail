@@ -8,7 +8,7 @@
     }
     "autoload": {
         "psr-4": {
-            "BookIt\\Codeception": "src/"
+            "BookIt\\Codeception\\TestRail": "src/"
         }
     }
 }

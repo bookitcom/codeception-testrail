@@ -1,19 +1,19 @@
 version: '2'
 
 services:
-    php:
-        image: bookitapparch/bacon-cli:5.4
-        environment:
-            - "APP_ENV=dev"
-        volumes:
-            - .:/var/www
-            - ./etc/ssh:/root/.ssh
-            - composercache:/root/.composer
-        dns:
-            - 172.19.1.11
-            - 172.16.1.210
-            - 172.16.1.211
+  php:
+    image: bookitapparch/bacon-cli:5.6
+    environment:
+      - "APP_ENV=dev"
+    volumes:
+      - ./:/var/www
+      - ./etc/ssh:/root/.ssh
+      - composercache:/root/.composer
+    dns:
+      - 172.19.1.11
+      - 172.16.1.210
+      - 172.16.1.211
 
 volumes:
-    composercache:
-        driver: local
+  composercache:
+    external: true

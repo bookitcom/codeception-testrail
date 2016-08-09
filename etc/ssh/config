@@ -1,0 +1,5 @@
+Host git.mco.ld
+  HostName git.mco.ld
+  Port 22
+  User gitread
+  IdentityFile ~/.ssh/gitread.priv

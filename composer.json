@@ -1,14 +1,15 @@
 {
     "name": "bookit/codeception-testrail",
     "require": {
-        "codeception/codeception": "^2.2"
+        "codeception/codeception": "^2.2",
+        "guzzlehttp/guzzle": "^6.2"
     },
     "require-dev": {
         "squizlabs/php_codesniffer": "^2.6"
-    }
+    },
     "autoload": {
         "psr-4": {
-            "BookIt\\Codeception\\TestRail": "src/"
+            "BookIt\\Codeception\\TestRail\\": "src/"
         }
     }
 }

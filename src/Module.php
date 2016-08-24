@@ -53,6 +53,7 @@ class Module extends CodeceptionModule
 
         $project = $conn->getProject($this->config['project']);
         $plan = $conn->createTestPlan($project, date('Y-m-d H:i:s'));
+        // TODO: procedural generation of test plan names (template?  provider class?)
 
         $this->conn = $conn;
         $this->project = $project;
@@ -62,6 +63,7 @@ class Module extends CodeceptionModule
     // HOOK: before each suite
     public function _beforeSuite($settings = array())
     {
+        // TODO: Reuse suite runs if the suite already has an entry
         $suite = $this->project->getSuite($this->config['suite']);
         $entry = $this->conn->createTestPlanEntry($this->plan, $suite);
         $entry->setSuite($suite);
@@ -69,13 +71,13 @@ class Module extends CodeceptionModule
         $this->run = $entry->getRuns()[0];
     }
 
-    // HOOK: after suite
-    public function _afterSuite()
+    // HOOK: before the test
+    public function _before(TestInterface $test)
     {
-        // close the test run
+        $this->testCase = null;
     }
 
-    // HOOK: after test
+    // HOOK: after the test
     public function _after(TestInterface $test)
     {
         if ($test instanceof Test && $this->testCase) {
@@ -107,6 +109,8 @@ class Module extends CodeceptionModule
     }
 
     /**
+     * Tell the module which test case you're recording a result for
+     *
      * @param int $caseId
      */
     public function setTestCase($caseId)

@@ -18,6 +18,18 @@ class Extension extends CodeceptionExtension
     const ANNOTATION_SUITE = 'tr-suite';
     const ANNOTATION_CASE  = 'tr-case';
 
+    const STATUS_SUCCESS    = 'success';
+    const STATUS_SKIPPED    = 'skipped';
+    const STATUS_INCOMPLETE = 'incomplete';
+    const STATUS_FAILED     = 'failed';
+    const STATUS_ERROR      = 'error';
+
+    const TESTRAIL_STATUS_SUCCESS = 1;
+    const TESTRAIL_STATUS_FAILED = 5;
+    const TESTRAIL_STATUS_UNTESTED = 3;
+    const TESTRAIL_STATUS_RETEST = 4;
+    const TESTRAIL_STATUS_BLOCKED = 2;
+
     public static $events = [
         Events::SUITE_AFTER     => 'afterSuite',
 
@@ -48,6 +60,17 @@ class Extension extends CodeceptionExtension
      */
     protected $results = [];
 
+    /**
+     * @var array
+     */
+    protected $statuses = [
+        self::STATUS_SUCCESS    => self::TESTRAIL_STATUS_SUCCESS,
+        self::STATUS_SKIPPED    => self::TESTRAIL_STATUS_UNTESTED,
+        self::STATUS_INCOMPLETE => self::TESTRAIL_STATUS_SUCCESS,
+        self::STATUS_FAILED     => self::TESTRAIL_STATUS_FAILED,
+        self::STATUS_ERROR      => self::TESTRAIL_STATUS_FAILED,
+    ];
+
     public function _initialize()
     {
         $conn = new Connection();
@@ -69,6 +92,11 @@ class Extension extends CodeceptionExtension
             'name' => date('Y-m-d H:i:s'),
         ]);
 
+        // merge the statuses from the config over the default ones
+        if (array_key_exists('status', $this->config)) {
+            $this->statuses = array_merge($this->statuses, $this->config['status']);
+        }
+        
         $this->conn = $conn;
         $this->project = $project->id;
         $this->plan = $plan->id;
@@ -76,6 +104,10 @@ class Extension extends CodeceptionExtension
 
     public function afterSuite(SuiteEvent $event)
     {
+        if (empty($this->results)) {
+            return;
+        }
+
         foreach ($this->results as $suiteId=>$results) {
             $caseIds = array_reduce($results, function ($carry, $val) {
                 $carry[] = $val['case_id'];
@@ -90,6 +122,12 @@ class Extension extends CodeceptionExtension
                 'case_ids' => $caseIds,
                 'include_all' => false,
             ]);
+
+            $results = array_filter($results, function ($val) {
+                return $val['status_id'] != $this::TESTRAIL_STATUS_UNTESTED;
+            });
+
+            codecept_debug($results);
 
             $run = $entry->runs[0];
             $this->conn->execute('/add_results_for_cases/'. $run->id, 'POST', [
@@ -108,7 +146,7 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, 1);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_SUCCESS]);
     }
 
     public function skipped(TestEvent $event)
@@ -121,7 +159,7 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, 11);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_SKIPPED]);
     }
 
     public function incomplete(TestEvent $event)
@@ -134,7 +172,7 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, 12);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_INCOMPLETE]);
     }
 
     public function failed(FailEvent $event)
@@ -147,7 +185,7 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, 5);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_FAILED]);
     }
 
     public function errored(FailEvent $event)
@@ -160,7 +198,7 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, 5);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_ERROR]);
     }
 
     /**
@@ -171,10 +209,6 @@ class Extension extends CodeceptionExtension
      */
     public function handleResult($suite, $case, $status)
     {
-        codecept_debug($suite);
-        codecept_debug($case);
-        codecept_debug($status);
-
         if ($suite && $case) {
             $this->results[$suite][] = [
                 'case_id' => $case,

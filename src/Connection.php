@@ -90,8 +90,9 @@ class Connection
             $opts['json'] = $payload;
         }
 
-        if (strpos($uri, '/') != 0) {
-            $uri = '/'. $uri;
+        // strip the leading slash since we're adding it back when we append the base
+        if (strpos($uri, '/') === 0) {
+            $uri = substr($uri,1);
         }
 
         $response = $this->client->request($verb, 'index.php?/api/v2/'.$uri, $opts);

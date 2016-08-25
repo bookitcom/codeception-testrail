@@ -2,22 +2,17 @@
 namespace BookIt\Codeception\TestRail;
 
 
-use BookIt\Codeception\TestRail\Model\Plan;
-use BookIt\Codeception\TestRail\Model\PlanEntry;
-use BookIt\Codeception\TestRail\Model\Project;
-use BookIt\Codeception\TestRail\Model\Run;
 use Codeception\Exception\ModuleException;
 use Codeception\Module as CodeceptionModule;
 use Codeception\Step;
-use Codeception\Test\Cest;
 use Codeception\Test\Test;
 use Codeception\TestInterface;
 
 class Module extends CodeceptionModule
 {
-    protected $requiredFields = ['user', 'apikey', 'project', 'suite'];
+    protected $requiredFields = [ 'user', 'apikey', 'project' ];
 
-    protected $config = [ ];
+    protected $config = [ 'suite' => null ];
 
     /**
      * @var Connection
@@ -25,34 +20,30 @@ class Module extends CodeceptionModule
     protected $conn;
 
     /**
-     * @var Project
+     * @var int
      */
     protected $project;
 
     /**
-     * @var Plan
+     * @var int
      */
     protected $plan;
 
     /**
-     * @var PlanEntry
+     * @var int
      */
-    protected $entry;
-
-    /**
-     * @var Run
-     */
-    protected $run;
+    protected $case;
 
     /**
      * @var int
      */
-    protected $testCase;
+    protected $suite;
 
     /**
-     * @var int[][]
+     * Multi-dimensional array of results
+     * @var array
      */
-    protected $usedCases = [];
+    protected $results = [];
 
     // HOOK: used after configuration is loaded
     public function _initialize()
@@ -62,33 +53,39 @@ class Module extends CodeceptionModule
         $conn->setApiKey($this->config['apikey']);
         $conn->connect('https://bookit.testrail.com');
 
-        $project = $conn->getProject($this->config['project']);
-        $plan = $conn->createTestPlan($project, date('Y-m-d H:i:s'));
+        $project = $conn->execute('get_project/'. $this->config['project']);
+
+        if ($project->is_completed) {
+            throw new ModuleException($this,'Project passed in the config has been completed and cannot be modified');
+        }
+
         // TODO: procedural generation of test plan names (template?  provider class?)
+        $plan = $conn->execute('add_plan/'. $project->id, 'POST', [
+            'name' => date('Y-m-d H:i:s'),
+        ]);
 
         $this->conn = $conn;
-        $this->project = $project;
-        $this->plan = $plan;
-    }
-
-    // HOOK: before each suite
-    public function _beforeSuite($settings = array())
-    {
-        // TODO: Reuse suite runs if the suite already has an entry
-        $suite = $this->project->getSuite($this->config['suite']);
-        $entry = $this->conn->createTestPlanEntry($this->plan, $suite);
-        $entry->setSuite($suite);
-        $this->plan->addEntry($entry);
-        $this->entry = $entry;
-        $this->run = $entry->getRuns()[0];
+        $this->project = $project->id;
+        $this->plan = $plan->id;
     }
 
     public function _afterSuite()
     {
-        foreach ($this->usedCases as $run=>$cases) {
-            $this->conn->updatePlanEntry($this->plan->getId(), $this->entry->getId(),[
+        foreach ($this->results as $suite=>$results) {
+            $caseIds = array_reduce($results, function ($carry, $val) {
+                $carry[] = $val['case_id'];
+                return $carry;
+            },[]);
+
+            $entry = $this->conn->execute('/add_plan_entry/'. $this->plan, 'POST', [
+                'suite_id' => $suite,
+                'case_ids' => $caseIds,
                 'include_all' => false,
-                'case_ids' => $cases,
+            ]);
+
+            $run = $entry->runs[0];
+            $this->conn->execute('/add_results_for_cases/'. $run->id, 'POST', [
+                'results' => $results,
             ]);
         }
     }
@@ -96,49 +93,75 @@ class Module extends CodeceptionModule
     // HOOK: before the test
     public function _before(TestInterface $test)
     {
-        $this->testCase = null;
+        $this->suite = null;
+        $this->case = null;
     }
 
     // HOOK: after the test
     public function _after(TestInterface $test)
     {
-        if ($test instanceof Test && $this->testCase) {
-            $this->_processResult($test->getTestResultObject());
-            $this->usedCases[$this->run->getId()][] = $this->testCase;
+        if ($test instanceof Test && $this->case) {
+            /** @var \PHPUnit_Framework_TestResult $result */
+            $result = $test->getTestResultObject();
+            $status = $this->_determineStatus($result);
+            $this->results[$this->suite][] = [
+                'case_id' => $this->case,
+                'status_id' => $status,
+                'comment' => sprintf(
+                    "%s \nAsserts: %d",
+                    $test->getSignature(),
+                    $test->getNumAssertions()
+                ),
+            ];
         }
     }
 
-    public function _processResult(\PHPUnit_Framework_TestResult $result)
+    public function _determineStatus(\PHPUnit_Framework_TestResult $result)
     {
+        $status = null;
         if ($result->wasSuccessful()) {
             if ($result->noneSkipped() && $result->allCompletelyImplemented()) {
-                $this->conn->addResult($this->run, $this->testCase, 1);
+                $status = 1;
             } else {
                 if (!$result->noneSkipped()) {
-                    $this->conn->addResult($this->run, $this->testCase, 11);
+                    $status = 11;
                 } elseif (!$result->allCompletelyImplemented()) {
-                    $this->conn->addResult($this->run, $this->testCase, 12);
+                    $status = 12;
                 }
             }
         } else {
             if ($result->errorCount() > 0) {
                 if ($result->failureCount() > 0) {
-                    $this->conn->addResult($this->run, $this->testCase, 5);
+                    $status = 5;
                 } else {
-                    $this->conn->addResult($this->run, $this->testCase, 5);
+                    $status = 5;
                 }
             }
         }
+
+        return $status;
     }
 
     /**
      * Tell the module which test case you're recording a result for
      *
-     * @param int $caseId
+     * @param int $case TestRail Test Case ID
+     * @param int $suite TestRail Test Suite ID
      */
-    public function setTestCase($caseId)
+    public function setTestCase($case, $suite=null)
     {
-        $this->testCase = $caseId;
+        if (!$suite) {
+            $suite = $this->config['suite'];
+
+            if (!$suite) {
+                throw new \RuntimeException(
+                    'No suite passed with the test case or the suite id supplied by the config is null'
+                );
+            }
+        }
+
+        $this->suite = $suite;
+        $this->case  = $case;
     }
 
 }

@@ -21,6 +21,7 @@ use GuzzleHttp\Client;
  * @method Model\Plan getTestPlan(int $planId)
  *
  * @method Model\PlanEntry createTestPlanEntry(int|Model\Plan $forPlan, int|Model\Suite $forSuite)
+ * @method void updateTestPlanEntry(int|Model\Plan $forPlan, int|Model\PlanEntry $forEntry, array $toUpdate)
  *
  * @method void addResult(int|Model\Run $forRun, int|Model\Suite $forCase, int $status)
  */

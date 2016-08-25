@@ -3,6 +3,7 @@ namespace BookIt\Codeception\TestRail;
 
 
 use BookIt\Codeception\TestRail\Model\Plan;
+use BookIt\Codeception\TestRail\Model\PlanEntry;
 use BookIt\Codeception\TestRail\Model\Project;
 use BookIt\Codeception\TestRail\Model\Run;
 use Codeception\Exception\ModuleException;
@@ -34,6 +35,11 @@ class Module extends CodeceptionModule
     protected $plan;
 
     /**
+     * @var PlanEntry
+     */
+    protected $entry;
+
+    /**
      * @var Run
      */
     protected $run;
@@ -42,6 +48,11 @@ class Module extends CodeceptionModule
      * @var int
      */
     protected $testCase;
+
+    /**
+     * @var int[][]
+     */
+    protected $usedCases = [];
 
     // HOOK: used after configuration is loaded
     public function _initialize()
@@ -68,7 +79,18 @@ class Module extends CodeceptionModule
         $entry = $this->conn->createTestPlanEntry($this->plan, $suite);
         $entry->setSuite($suite);
         $this->plan->addEntry($entry);
+        $this->entry = $entry;
         $this->run = $entry->getRuns()[0];
+    }
+
+    public function _afterSuite()
+    {
+        foreach ($this->usedCases as $run=>$cases) {
+            $this->conn->updatePlanEntry($this->plan->getId(), $this->entry->getId(),[
+                'include_all' => false,
+                'case_ids' => $cases,
+            ]);
+        }
     }
 
     // HOOK: before the test
@@ -82,6 +104,7 @@ class Module extends CodeceptionModule
     {
         if ($test instanceof Test && $this->testCase) {
             $this->_processResult($test->getTestResultObject());
+            $this->usedCases[$this->run->getId()][] = $this->testCase;
         }
     }
 

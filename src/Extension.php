@@ -321,15 +321,7 @@ class Extension extends CodeceptionExtension
             return null;
         }
 
-        $case = Annotation::forMethod($test->getTestClass(), $test->getTestMethod())->fetch($this::ANNOTATION_CASE);
-        if (!$case) {
-            $case = Annotation::forClass($test->getTestClass())->fetch($this::ANNOTATION_CASE);
-            if (!$case) {
-                return null;
-            }
-        }
-
-        return $case;
+        return Annotation::forMethod($test->getTestClass(), $test->getTestMethod())->fetch($this::ANNOTATION_CASE);
     }
 
     /**

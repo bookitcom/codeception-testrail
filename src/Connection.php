@@ -1,7 +1,6 @@
 <?php
 namespace BookIt\Codeception\TestRail;
 
-
 use BookIt\Codeception\TestRail\Action\ActionInterface;
 use BookIt\Codeception\TestRail\Exception\ActionNotFound;
 use BookIt\Codeception\TestRail\Exception\CallException;
@@ -9,6 +8,7 @@ use GuzzleHttp\Client;
 
 /**
  * Class Connection
+ *
  * @package BookIt\Codeception\TestRail
  *
  * @method Model\Project getProject(int $projectId)
@@ -66,17 +66,19 @@ class Connection
      */
     public function connect($baseUri)
     {
-        $this->client = new Client([
+        $this->client = new Client(
+            [
             'base_uri' => $baseUri,
-        ]);
+            ]
+        );
     }
 
     /**
      * @param string $uri
      * @param string $verb
-     * @param array $payload
+     * @param array  $payload
      */
-    public function execute($uri, $verb='GET', array $payload=[])
+    public function execute($uri, $verb = 'GET', array $payload = [])
     {
         $opts = [
             'auth' => $this->auth,
@@ -92,7 +94,7 @@ class Connection
 
         // strip the leading slash since we're adding it back when we append the base
         if (strpos($uri, '/') === 0) {
-            $uri = substr($uri,1);
+            $uri = substr($uri, 1);
         }
 
         $response = $this->client->request($verb, 'index.php?/api/v2/'.$uri, $opts);
@@ -103,11 +105,13 @@ class Connection
                 break;
             default:
                 $error = json_decode($response->getBody()->getContents());
-                throw new CallException(sprintf(
-                    'Call to remote API failed with status %d message %s',
-                    $response->getStatusCode(),
-                    $error->error
-                ));
+                throw new CallException(
+                    sprintf(
+                        'Call to remote API failed with status %d message %s',
+                        $response->getStatusCode(),
+                        $error->error
+                    )
+                );
         }
 
         return $ret;
@@ -117,7 +121,7 @@ class Connection
      * Magic caller which calls the relevant Action class
      *
      * @param string $name
-     * @param array $args
+     * @param array  $args
      */
     public function __call($name, array $args)
     {
@@ -127,13 +131,15 @@ class Connection
                 $this->actions[$name] = new $action();
                 $this->actions[$name]->setConnection($this);
             } else {
-                throw new ActionNotFound(sprintf('
+                throw new ActionNotFound(
+                    sprintf(
+                        '
                     The TestRail Connection couldn\'t locate an action class for "%s".',
-                    $name
-                ));
+                        $name
+                    )
+                );
             }
         }
         return call_user_func_array($this->actions[$name], $args);
     }
-
 }

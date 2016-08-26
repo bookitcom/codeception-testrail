@@ -1,7 +1,6 @@
 <?php
 namespace BookIt\Codeception\TestRail;
 
-
 use Codeception\Event\FailEvent;
 use Codeception\Event\SuiteEvent;
 use Codeception\Event\TestEvent;
@@ -94,14 +93,17 @@ class Extension extends CodeceptionExtension
             }
 
             // TODO: procedural generation of test plan names (template?  provider class?)
-            $plan = $conn->execute('add_plan/'. $project->id, 'POST', [
+            $plan = $conn->execute(
+                'add_plan/'. $project->id,
+                'POST',
+                [
                 'name' => date('Y-m-d H:i:s'),
-            ]);
+                ]
+            );
 
             $this->conn = $conn;
             $this->project = $project->id;
             $this->plan = $plan->id;
-
         }
 
         // merge the statuses from the config over the default ones
@@ -117,29 +119,44 @@ class Extension extends CodeceptionExtension
             return;
         }
 
-        foreach ($this->results as $suiteId=>$results) {
-            $caseIds = array_reduce($results, function ($carry, $val) {
-                $carry[] = $val['case_id'];
-                return $carry;
-            },[]);
+        foreach ($this->results as $suiteId => $results) {
+            $caseIds = array_reduce(
+                $results,
+                function ($carry, $val) {
+                    $carry[] = $val['case_id'];
+                    return $carry;
+                },
+                []
+            );
 
             $suiteDetails = $this->conn->execute('/get_suite/'. $suiteId);
 
-            $entry = $this->conn->execute('/add_plan_entry/'. $this->plan, 'POST', [
+            $entry = $this->conn->execute(
+                '/add_plan_entry/'. $this->plan,
+                'POST',
+                [
                 'suite_id' => $suiteId,
                 'name' => $event->getSuite()->getName(). ' : '. $suiteDetails->name,
                 'case_ids' => $caseIds,
                 'include_all' => false,
-            ]);
+                ]
+            );
 
-            $results = array_filter($results, function ($val) {
-                return $val['status_id'] != $this::TESTRAIL_STATUS_UNTESTED;
-            });
+            $results = array_filter(
+                $results,
+                function ($val) {
+                    return $val['status_id'] != $this::TESTRAIL_STATUS_UNTESTED;
+                }
+            );
 
             $run = $entry->runs[0];
-            $this->conn->execute('/add_results_for_cases/'. $run->id, 'POST', [
+            $this->conn->execute(
+                '/add_results_for_cases/'. $run->id,
+                'POST',
+                [
                 'results' => $results,
-            ]);
+                ]
+            );
         }
     }
 
@@ -153,9 +170,14 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_SUCCESS], [
+        $this->handleResult(
+            $suite,
+            $case,
+            $this->statuses[$this::STATUS_SUCCESS],
+            [
             'elapsed' => $event->getTime(),
-        ]);
+            ]
+        );
     }
 
     public function skipped(TestEvent $event)
@@ -168,9 +190,14 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_SKIPPED], [
+        $this->handleResult(
+            $suite,
+            $case,
+            $this->statuses[$this::STATUS_SKIPPED],
+            [
             'elapsed' => $event->getTime(),
-        ]);
+            ]
+        );
     }
 
     public function incomplete(TestEvent $event)
@@ -183,9 +210,14 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_INCOMPLETE], [
+        $this->handleResult(
+            $suite,
+            $case,
+            $this->statuses[$this::STATUS_INCOMPLETE],
+            [
             'elapsed' => $event->getTime(),
-        ]);
+            ]
+        );
     }
 
     public function failed(FailEvent $event)
@@ -198,9 +230,14 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_FAILED], [
+        $this->handleResult(
+            $suite,
+            $case,
+            $this->statuses[$this::STATUS_FAILED],
+            [
             'elapsed' => $event->getTime(),
-        ]);
+            ]
+        );
     }
 
     public function errored(FailEvent $event)
@@ -213,18 +250,23 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_ERROR], [
+        $this->handleResult(
+            $suite,
+            $case,
+            $this->statuses[$this::STATUS_ERROR],
+            [
             'elapsed' => $event->getTime(),
-        ]);
+            ]
+        );
     }
 
     /**
-     * @param int $suite TestRail Suite ID
-     * @param int $case TestRail Case ID
-     * @param int $status TestRail Status ID
-     * @param array $other Array of other elements to add to the result (comments, elapsed, etc)
+     * @param int   $suite  TestRail Suite ID
+     * @param int   $case   TestRail Case ID
+     * @param int   $status TestRail Status ID
+     * @param array $other  Array of other elements to add to the result (comments, elapsed, etc)
      */
-    public function handleResult($suite, $case, $status, $optional=[])
+    public function handleResult($suite, $case, $status, $optional = [])
     {
         if ($suite && $case) {
             $result = [
@@ -324,5 +366,4 @@ class Extension extends CodeceptionExtension
 
         return trim($formatted);
     }
-
 }

@@ -3,7 +3,6 @@
 
 namespace BookIt\Codeception\TestRail\Action;
 
-
 use BookIt\Codeception\TestRail\Connection;
 
 trait BasicActionTrait
@@ -28,5 +27,4 @@ trait BasicActionTrait
     {
         return $this->conn;
     }
-    
 }

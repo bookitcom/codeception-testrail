@@ -1,7 +1,6 @@
 <?php
 namespace BookIt\Codeception\TestRail\Action;
 
-
 use BookIt\Codeception\TestRail\Connection;
 
 interface ActionInterface
@@ -16,5 +15,4 @@ interface ActionInterface
      * @return mixed
      */
     public function __invoke();
-
 }

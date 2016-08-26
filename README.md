@@ -1,81 +1,86 @@
 # Codeception TestRail Integration Module
 
-This [Codeception](https://codeception.com) module allow for tests to report their results to
+This [Codeception](https://codeception.com) extension provides functionality for tests to report results to
 [TestRail](https://testrail.com) using the [TestRail API v2](http://docs.gurock.com/testrail-api2/start).
 
-**Note:** The module currently only supports the `Cest` or `Cept` test format.  It cannot report PHPUnit tests.
+**Note:** The extension currently only supports the `Cest` Codeception test format.  It cannot report PHPUnit or `Cept`
+tests.
 
 ## Theory of Operation
-The module hooks the following Codeception actions: `_initialize()`, `_beforeSuite()`, `_before()`, `_after()`.  The
-module currently makes no attempts to close the test plan.
+The extension hooks the following Codeception events: `suite.after`, `test.success`, `test.skipped`, `test.incomplete`,
+`test.error`, and `test.fail`.  The extension also provides an `_initialize()` method and some other helper methods.
 
 During the `_initialize()` step, the module will fetch the project details and create a new plan for the run.  The plan
-name can be procedurally generated but by default it will be the date and time formatted as *Y-m-d H:i;s*.
+name can be procedurally generated but by default it will be the date and time formatted as *Y-m-d H:i;s*.  Also during
+this step the default status list is overriden with any from the config.
 
-During `_beforeSuite()` the module will register the current suite as an entry in the test plan.  It will check to see
-if the suite already has an entry and will reuse that one.  The suite entry will use all of the Test Cases from the
-TestRail Test Suite.  There are currently no facilities to include only specific Test Cases from a TestRail Test Suite.
+During the `test.success`, `test.skipped`, `test.incomplete`, `test.error`, and `test.fail` events, a result is recorded
+for that event.  TestRail Suites and TestRail Test Cases are set for the test using annotations (`@tr-suite` and
+`@tr-case`).  The TestRail Suite can either be set at the class level or the method level; precedent is give to the
+method level annotation.  The TestRail Test Case can only be set at the method level.  Additionally, the elapsed time
+of the test will be formatted and recorded.
 
-During `_before()` the module clears the test state and other prep work.
+During the `after.suite` event, the collected results will be transmitted to TestRail.  This is accomplished by
+performing two actions.  The first action is to create a TestRail Test Plan Entry for each of the TestRail suites in the
+result set.  The Test Plan Entry will only contain Test Cases which were also registered.  The Test Plan Entry will
+be named after the Codeception suite and the TestRail suite, separated by a colon.
 
-During `_after()` the module checks that a Test Case ID was set and then delegates to a helper method to log the result
-in TestRail using the other details previously gathered.  This table illustrates the default status mapping for TestRail:
+After the Test Plan Entry is created, the Test Run ID is captured from the response and the test results are transmitted
+using the bulk test result action.  Before the results are passed to TestRail, they're filtered to remove any results
+which set the TestRail System Status of *Untested*.  The TestRail API issues an error when a result attempts to set this
+status.
 
-| Codeception Status | TestRail Status |
-|:------------------ |:---------------:|
-| SUCCESS            | 1               |
-| FAILURE            | 5               |
-| ERROR              | 5               |
-| INCOMPLETE         | 5               |
-| SKIPPED            | 5               |
+The default status map is:
 
-# Configuration
+| Codeception Status | TestRail Status | TestRail Status ID |
+|:------------------ |:---------------:|:------------------:|
+| success            | Success         | 1                  |
+| failure            | Failed          | 5                  |
+| error              | Failed          | 5                  |
+| incomplete         | Success         | 1                  |
+| skipped            | Untested        | 3                  |
 
-The module requires four configuration parameters to be set (`user`, `apikey`, `project`, `suite`).  Out of the box the
-module will work with any project type, including multi-suite projects.
+## Configuration
 
-## Setup the Access Credentials
-The easiest way to setup access credentials is to add it to the global module configuration in the `codeception.yml` in
-your projects root directory.
+The extension requires four configuration parameters to be set (`user`, `apikey`, `project`).  There are additional
+configuration options for overriding statuses and disabling the connection to TestRail.
 
-```yaml
-modules:
-    config:
-        \BookIt\Codeception\TestRail\Module:
-            user: 'mark.randles@bookit.com'
-            apikey: 'thequickbrownfoxjumpsoverthelazydog'
-```
-
-We prefer to use an API key for access.  To generate an API key see the TestRail documents.  If you want, you can
-also your password here.  But remember, it will be stored in plain text as part of your repository.
-
-## Setup a Codeception Test Suite for Reporting
-The easiest way to set the `project` and `suite` config keys is to add them to the module config for the test suite
-for which they're used.  If you're using a multi-suite project, you may want to set the project in the core
-`codeception.yml` config in your project root directory.
+To enable the extension the following can be added to your `codeception.yml` config file:
 
 ```yaml
-modules:
+extensions:
     enabled:
-        - Asserts
-        - \Helper\Test
-        - \BookIt\Codeception\TestRail\Module:
-            project: 9
-            suite: 57
+        - BookIt\Codeception\TestRail\Extension
 ```
 
-# Usage
-Add a test to report in TestRail is straightforward.  The module will only attempt to report results when a test case id
-is available and the test is either a `Cest` or a `Cept`.
+Global configuration options (like the `user` and `apikey`) should also be set in the `codeception.yml` config:
 
-## Create the Test Case in TestRail
-Before you can report the results, you must manually create the test case in TestRail.  Creation of these test cases is
-no different then if you were using TestRail as a manual testing platform.  The actual contents of the test case doesn't
-matter and the module will not change the contents of the test case.
+```yaml
+extensions:
+    config:
+        BookIt\Codeception\TestRail\Extension:
+            enabled: false                  # When false, don't communicate with TestRail (optional; default: true)
+            user: 'mark.randles@bookit.com' # A TestRail user (required)
+            apikey: 'REDACTED'              # A TestRail API Key (required)
+            project: 9                      # TestRail Project ID (required)
+            status:
+                success: 1				    # Override the default success status (optional)
+                skipped: 11                 # Override the default skipped status (optional)
+                incomplete: 12              # Override the default incomplete status (optional)
+                failed: 5                   # Override the default failed status (optional)
+                error: 5                    # Override the default error status (optional)
+```
 
-## Register the TestRail Test Case with the Codeception Test
-To connect the TestRail Test Case with the Codeception Test, you must call the `setTestCase` method provided from the
-module.  This method takes the integer id of the TestRail Test Case as a parameter.  The last call to `setTestCase` in a
-given Codeception test will be the TestRail Test Case id used for reporting.
+## More Information
 
-When the Codeception test completes, the results will be reported to TestRail.
+* [Codeception](https://codeception.com)
+* [TestRail](https://testrail.com)
+* [TestRail API](http://docs.gurock.com/testrail-api2/start)
+* [TestRail API Keys & Authentication](http://docs.gurock.com/testrail-api2/accessing#username_and_api_key)
+
+## License
+
+MIT
+
+(c) BookIt.com 2016
+

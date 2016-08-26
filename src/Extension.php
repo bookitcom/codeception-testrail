@@ -63,6 +63,11 @@ class Extension extends CodeceptionExtension
     /**
      * @var array
      */
+    protected $config = [ 'enabled' => true ];
+
+    /**
+     * @var array
+     */
     protected $statuses = [
         self::STATUS_SUCCESS    => self::TESTRAIL_STATUS_SUCCESS,
         self::STATUS_SKIPPED    => self::TESTRAIL_STATUS_UNTESTED,
@@ -73,38 +78,42 @@ class Extension extends CodeceptionExtension
 
     public function _initialize()
     {
-        $conn = new Connection();
-        $conn->setUser($this->config['user']);
-        $conn->setApiKey($this->config['apikey']);
-        $conn->connect('https://bookit.testrail.com');
+        // we only care to do these things if the extension is enabled
+        if ($this->config['enabled']) {
+            $conn = new Connection();
+            $conn->setUser($this->config['user']);
+            $conn->setApiKey($this->config['apikey']);
+            $conn->connect('https://bookit.testrail.com');
 
-        $project = $conn->execute('get_project/'. $this->config['project']);
+            $project = $conn->execute('get_project/'. $this->config['project']);
+            if ($project->is_completed) {
+                throw new ExtensionException(
+                    $this,
+                    'TestRail project id passed in the config has been completed and cannot be modified'
+                );
+            }
 
-        if ($project->is_completed) {
-            throw new ExtensionException(
-                $this,
-                'TestRail project id passed in the config has been completed and cannot be modified'
-            );
+            // TODO: procedural generation of test plan names (template?  provider class?)
+            $plan = $conn->execute('add_plan/'. $project->id, 'POST', [
+                'name' => date('Y-m-d H:i:s'),
+            ]);
+
+            $this->conn = $conn;
+            $this->project = $project->id;
+            $this->plan = $plan->id;
+
         }
-
-        // TODO: procedural generation of test plan names (template?  provider class?)
-        $plan = $conn->execute('add_plan/'. $project->id, 'POST', [
-            'name' => date('Y-m-d H:i:s'),
-        ]);
 
         // merge the statuses from the config over the default ones
         if (array_key_exists('status', $this->config)) {
             $this->statuses = array_merge($this->statuses, $this->config['status']);
         }
-        
-        $this->conn = $conn;
-        $this->project = $project->id;
-        $this->plan = $plan->id;
     }
 
     public function afterSuite(SuiteEvent $event)
     {
-        if (empty($this->results)) {
+        // skip action if we don't have results or the Extension is disabled
+        if (empty($this->results) || !$this->config['enabled']) {
             return;
         }
 
@@ -127,8 +136,6 @@ class Extension extends CodeceptionExtension
                 return $val['status_id'] != $this::TESTRAIL_STATUS_UNTESTED;
             });
 
-            codecept_debug($results);
-
             $run = $entry->runs[0];
             $this->conn->execute('/add_results_for_cases/'. $run->id, 'POST', [
                 'results' => $results,
@@ -146,7 +153,9 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_SUCCESS]);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_SUCCESS], [
+            'elapsed' => $event->getTime(),
+        ]);
     }
 
     public function skipped(TestEvent $event)
@@ -159,7 +168,9 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_SKIPPED]);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_SKIPPED], [
+            'elapsed' => $event->getTime(),
+        ]);
     }
 
     public function incomplete(TestEvent $event)
@@ -172,7 +183,9 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_INCOMPLETE]);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_INCOMPLETE], [
+            'elapsed' => $event->getTime(),
+        ]);
     }
 
     public function failed(FailEvent $event)
@@ -185,7 +198,9 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_FAILED]);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_FAILED], [
+            'elapsed' => $event->getTime(),
+        ]);
     }
 
     public function errored(FailEvent $event)
@@ -198,7 +213,9 @@ class Extension extends CodeceptionExtension
 
         $suite = $this->getSuiteForTest($test);
         $case = $this->getCaseForTest($test);
-        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_ERROR]);
+        $this->handleResult($suite, $case, $this->statuses[$this::STATUS_ERROR], [
+            'elapsed' => $event->getTime(),
+        ]);
     }
 
     /**
@@ -207,13 +224,25 @@ class Extension extends CodeceptionExtension
      * @param int $status TestRail Status ID
      * @param array $other Array of other elements to add to the result (comments, elapsed, etc)
      */
-    public function handleResult($suite, $case, $status)
+    public function handleResult($suite, $case, $status, $optional=[])
     {
         if ($suite && $case) {
-            $this->results[$suite][] = [
+            $result = [
                 'case_id' => $case,
                 'status_id' => $status,
             ];
+
+            if (!empty($optional)) {
+                if (isset($optional['comment'])) {
+                    $result['comment'] = $optional['comment'];
+                }
+
+                if (isset($optional['elapsed'])) {
+                    $result['elapsed'] = $this->formatTime($optional['elapsed']);
+                }
+            }
+
+            $this->results[$suite][] = $result;
         }
     }
 
@@ -260,4 +289,40 @@ class Extension extends CodeceptionExtension
 
         return $case;
     }
+
+    /**
+     * Formats a float seconds to a format that TestRail recognizes.  Will parse to hours, minutes, and seconds.
+     *
+     * @param float $time
+     *
+     * @return string
+     */
+    public function formatTime($time)
+    {
+        // TestRail doesn't support subsecond times
+        if ($time < 1.0) {
+            return '0s';
+        }
+
+        $formatted = '';
+        $intTime = round($time);
+        $intervals = [
+            'h' => 3600,
+            'm' => 60,
+            's' => 1,
+        ];
+
+        foreach ($intervals as $suffix => $divisor) {
+            if ($divisor > $intTime) {
+                continue;
+            }
+
+            $amount = floor($intTime / $divisor);
+            $intTime -= $amount * $divisor;
+            $formatted .= $amount.$suffix.' ';
+        }
+
+        return trim($formatted);
+    }
+
 }

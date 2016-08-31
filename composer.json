@@ -14,5 +14,10 @@
         "psr-4": {
             "BookIt\\Codeception\\TestRail\\": "src/"
         }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "BookIt\\Codeception\\TestRail\\Tests\\Unit\\": "tests/unit"
+        }
     }
 }

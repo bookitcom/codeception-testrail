@@ -79,10 +79,7 @@ class Extension extends CodeceptionExtension
     {
         // we only care to do these things if the extension is enabled
         if ($this->config['enabled']) {
-            $conn = new Connection();
-            $conn->setUser($this->config['user']);
-            $conn->setApiKey($this->config['apikey']);
-            $conn->connect('https://bookit.testrail.com');
+            $conn = $this->getConnection();
 
             $project = $conn->execute('get_project/'. $this->config['project']);
             if ($project->is_completed) {
@@ -101,7 +98,6 @@ class Extension extends CodeceptionExtension
                 ]
             );
 
-            $this->conn = $conn;
             $this->project = $project->id;
             $this->plan = $plan->id;
         }
@@ -114,12 +110,15 @@ class Extension extends CodeceptionExtension
 
     public function afterSuite(SuiteEvent $event)
     {
+        $recorded = $this->getResults();
         // skip action if we don't have results or the Extension is disabled
-        if (empty($this->results) || !$this->config['enabled']) {
+        if (empty($recorded) || !$this->config['enabled']) {
             return;
         }
 
-        foreach ($this->results as $suiteId => $results) {
+        $conn = $this->getConnection();
+
+        foreach ($recorded as $suiteId => $results) {
             $caseIds = array_reduce(
                 $results,
                 function ($carry, $val) {
@@ -129,9 +128,9 @@ class Extension extends CodeceptionExtension
                 []
             );
 
-            $suiteDetails = $this->conn->execute('/get_suite/'. $suiteId);
+            $suiteDetails = $conn->execute('/get_suite/'. $suiteId);
 
-            $entry = $this->conn->execute(
+            $entry = $conn->execute(
                 '/add_plan_entry/'. $this->plan,
                 'POST',
                 [
@@ -150,7 +149,7 @@ class Extension extends CodeceptionExtension
             );
 
             $run = $entry->runs[0];
-            $this->conn->execute(
+            $conn->execute(
                 '/add_results_for_cases/'. $run->id,
                 'POST',
                 [
@@ -164,7 +163,7 @@ class Extension extends CodeceptionExtension
     {
         $test = $event->getTest();
 
-        if (!$test instanceof Test) {
+        if (!$test instanceof Cest) {
             return;
         }
 
@@ -184,7 +183,7 @@ class Extension extends CodeceptionExtension
     {
         $test = $event->getTest();
 
-        if (!$test instanceof Test) {
+        if (!$test instanceof Cest) {
             return;
         }
 
@@ -204,7 +203,7 @@ class Extension extends CodeceptionExtension
     {
         $test = $event->getTest();
 
-        if (!$test instanceof Test) {
+        if (!$test instanceof Cest) {
             return;
         }
 
@@ -224,7 +223,7 @@ class Extension extends CodeceptionExtension
     {
         $test = $event->getTest();
 
-        if (!$test instanceof Test) {
+        if (!$test instanceof Cest) {
             return;
         }
 
@@ -244,7 +243,7 @@ class Extension extends CodeceptionExtension
     {
         $test = $event->getTest();
 
-        if (!$test instanceof Test) {
+        if (!$test instanceof Cest) {
             return;
         }
 
@@ -258,6 +257,39 @@ class Extension extends CodeceptionExtension
             'elapsed' => $event->getTime(),
             ]
         );
+    }
+
+    /**
+     * @return array
+     */
+    public function getResults()
+    {
+        return $this->results;
+    }
+
+    /**
+     * @return Connection
+     */
+    public function getConnection()
+    {
+        if (!$this->conn) {
+            $conn = new Connection();
+            $conn->setUser($this->config['user']);
+            $conn->setApiKey($this->config['apikey']);
+            $conn->connect('https://bookit.testrail.com');
+            $this->conn = $conn;
+        }
+        return $this->conn;
+    }
+
+    /**
+     * Inject an overlay config.  mostly useful for unit testing
+     *
+     * @param array $config
+     */
+    public function injectConfig(array $config)
+    {
+        $this->config = array_merge($this->config, $config);
     }
 
     /**
@@ -292,6 +324,8 @@ class Extension extends CodeceptionExtension
      * @param TestInterface $test
      *
      * @return int|null
+     *
+     * @codeCoverageIgnore
      */
     public function getSuiteForTest(TestInterface $test)
     {
@@ -314,6 +348,8 @@ class Extension extends CodeceptionExtension
      * @param TestInterface $test
      *
      * @return int|null
+     *
+     * @codeCoverageIgnore
      */
     public function getCaseForTest(TestInterface $test)
     {

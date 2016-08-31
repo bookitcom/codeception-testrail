@@ -10,20 +10,6 @@ use GuzzleHttp\Client;
  * Class Connection
  *
  * @package BookIt\Codeception\TestRail
- *
- * @method Model\Project getProject(int $projectId)
- *
- * @method Model\Suite[] getSuites(int|Model\Project $forProject)
- *
- * @method Model\TestCase[] getTestCases(int|Model\Project $forProject, int|Model\Suite $forSuite)
- *
- * @method Model\Plan createTestPlan(int|Model\Project $forProject, string $withName)
- * @method Model\Plan getTestPlan(int $planId)
- *
- * @method Model\PlanEntry createTestPlanEntry(int|Model\Plan $forPlan, int|Model\Suite $forSuite)
- * @method void updateTestPlanEntry(int|Model\Plan $forPlan, int|Model\PlanEntry $forEntry, array $toUpdate)
- *
- * @method void addResult(int|Model\Run $forRun, int|Model\Suite $forCase, int $status)
  */
 class Connection
 {
@@ -66,11 +52,21 @@ class Connection
      */
     public function connect($baseUri)
     {
-        $this->client = new Client(
-            [
-            'base_uri' => $baseUri,
-            ]
+        $this->setClient(
+            new Client(
+                [
+                'base_uri' => $baseUri,
+                ]
+            )
         );
+    }
+
+    /**
+     * @param Client $client
+     */
+    public function setClient(Client $client)
+    {
+        $this->client = $client;
     }
 
     /**
@@ -99,22 +95,7 @@ class Connection
 
         $response = $this->client->request($verb, 'index.php?/api/v2/'.$uri, $opts);
 
-        switch ($response->getStatusCode()) {
-            case 200:
-                $ret = json_decode($response->getBody()->getContents());
-                break;
-            default:
-                $error = json_decode($response->getBody()->getContents());
-                throw new CallException(
-                    sprintf(
-                        'Call to remote API failed with status %d message %s',
-                        $response->getStatusCode(),
-                        $error->error
-                    )
-                );
-        }
-
-        return $ret;
+        return json_decode($response->getBody()->getContents());
     }
 
     /**

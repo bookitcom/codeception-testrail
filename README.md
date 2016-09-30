@@ -6,6 +6,15 @@ This [Codeception](https://codeception.com) extension provides functionality for
 **Note:** The extension currently only supports the `Cest` Codeception test format.  It cannot report PHPUnit or `Cept`
 tests.
 
+## Installation
+
+The easiest way to install this plugin is using [Composer](https://getcomposer.org/).  You can install module
+by running:
+
+```
+composer require --dev bookitcom/codeception-testrail
+```
+
 ## Theory of Operation
 The extension hooks the following Codeception events: `suite.after`, `test.success`, `test.skipped`, `test.incomplete`,
 `test.error`, and `test.fail`.  The extension also provides an `_initialize()` method and some other helper methods.
@@ -59,16 +68,17 @@ Global configuration options (like the `user` and `apikey`) should also be set i
 extensions:
     config:
         BookIt\Codeception\TestRail\Extension:
-            enabled: false                  # When false, don't communicate with TestRail (optional; default: true)
-            user: 'mark.randles@bookit.com' # A TestRail user (required)
-            apikey: 'REDACTED'              # A TestRail API Key (required)
-            project: 9                      # TestRail Project ID (required)
+            enabled: false                    # When false, don't communicate with TestRail (optional; default: true)
+            user: 'mark.randles@bookit.com'   # A TestRail user (required)
+            apikey: 'REDACTED'                # A TestRail API Key (required)
+	  		url: 'https://myurl.testrail.com' # The base URL for you TestRail Instance
+            project: 9                        # TestRail Project ID (required)
             status:
-                success: 1				    # Override the default success status (optional)
-                skipped: 11                 # Override the default skipped status (optional)
-                incomplete: 12              # Override the default incomplete status (optional)
-                failed: 5                   # Override the default failed status (optional)
-                error: 5                    # Override the default error status (optional)
+                success: 1                    # Override the default success status (optional)
+                skipped: 11                   # Override the default skipped status (optional)
+                incomplete: 12                # Override the default incomplete status (optional)
+                failed: 5                     # Override the default failed status (optional)
+                error: 5                      # Override the default error status (optional)
 ```
 
 ## More Information

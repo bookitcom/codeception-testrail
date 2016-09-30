@@ -10,6 +10,7 @@ use Codeception\Suite;
 use Codeception\Test\Cept;
 use Codeception\Test\Cest;
 use Exception;
+use GuzzleHttp\Client;
 
 class ExtensionTest extends \PHPUnit_Framework_TestCase
 {
@@ -44,11 +45,13 @@ class ExtensionTest extends \PHPUnit_Framework_TestCase
         $target->injectConfig([
             'user' => 'a.user@example.com',
             'apikey' => 'randomstring',
+            'url' => 'http://myurl.testrail.com',
         ]);
 
         $this->assertAttributeEmpty('conn', $target);
         $conn = $target->getConnection();
         $this->assertAttributeSame($conn, 'conn', $target);
+        $this->assertAttributeInstanceOf(Client::class, 'client', $conn);
     }
 
     public function testHandleResult()

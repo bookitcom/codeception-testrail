@@ -276,7 +276,7 @@ class Extension extends CodeceptionExtension
             $conn = new Connection();
             $conn->setUser($this->config['user']);
             $conn->setApiKey($this->config['apikey']);
-            $conn->connect('https://bookit.testrail.com');
+            $conn->connect($this->config['url']);
             $this->conn = $conn;
         }
         return $this->conn;

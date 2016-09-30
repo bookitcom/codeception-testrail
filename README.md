@@ -12,7 +12,7 @@ The easiest way to install this plugin is using [Composer](https://getcomposer.o
 by running:
 
 ```
-composer require --dev bookitcom/codeception-testrail
+composer require --dev bookit/codeception-testrail
 ```
 
 ## Theory of Operation
